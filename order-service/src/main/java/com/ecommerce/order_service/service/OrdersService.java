@@ -1,8 +1,10 @@
 package com.ecommerce.order_service.service;
 
 import com.ecommerce.order_service.clients.InventoryOpenFeignClient;
+import com.ecommerce.order_service.clients.ShippingOpenFeignClient;
 import com.ecommerce.order_service.dto.OrderRequestDto;
 import com.ecommerce.order_service.dto.OrderRequestItemDto;
+import com.ecommerce.order_service.dto.ShippingRequestDto;
 import com.ecommerce.order_service.entity.OrderItem;
 import com.ecommerce.order_service.entity.OrderStatus;
 import com.ecommerce.order_service.entity.Orders;
@@ -25,6 +27,7 @@ public class OrdersService {
     private final OrdersRepository orderRepository;
     private final ModelMapper modelMapper;
     private final InventoryOpenFeignClient inventoryOpenFeignClient;
+    private final ShippingOpenFeignClient shippingOpenFeignClient;
 
     public List<OrderRequestDto> getAllOrders() {
         log.info("Fetching all orders");
@@ -53,6 +56,11 @@ public class OrdersService {
         orders.setOrderStatus(OrderStatus.CONFIRMED);
 
         Orders savedOrder = orderRepository.save(orders);
+        log.info("Order with ID: {}", savedOrder.getId());
+
+        ShippingRequestDto shippingRequestDto = new ShippingRequestDto();
+        shippingRequestDto.setOrderId(savedOrder.getId());
+        shippingOpenFeignClient.createShipping(shippingRequestDto);
 
         return modelMapper.map(savedOrder, OrderRequestDto.class);
     }
