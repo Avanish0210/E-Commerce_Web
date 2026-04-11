@@ -2,6 +2,7 @@ package com.ecommerce.inventory_service.controller;
 
 import com.ecommerce.inventory_service.clients.OrdersFeignClient;
 import com.ecommerce.inventory_service.dto.OrderRequestDto;
+import com.ecommerce.inventory_service.dto.OrderRequestItemDto;
 import com.ecommerce.inventory_service.dto.ProductDto;
 import com.ecommerce.inventory_service.service.ProductService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -60,5 +61,11 @@ public class ProductController {
         return ResponseEntity.ok(totalPrice);
     }
 
+
+    @PutMapping("add-stocks")
+    public ResponseEntity<Double> addStocks(@RequestBody OrderRequestItemDto orderRequestItemDto) {
+        Double totalPrice = productService.addStocks(orderRequestItemDto);
+        return ResponseEntity.ok(totalPrice);
+    }
 
 }

@@ -58,4 +58,20 @@ public class ProductService {
         }
         return totalPrice;
     }
+
+    @Transactional
+    public Double addStocks(OrderRequestItemDto orderRequestItemDto) {
+        Double totalPrice = 0.0;
+        Long productId = orderRequestItemDto.getProductId();
+        Integer quantity = orderRequestItemDto.getQuantity();
+
+        Product product = productRepository.findById(productId).orElseThrow(() ->
+                new RuntimeException("Product not found with id: "+productId));
+
+        product.setStock(product.getStock()+quantity);
+        productRepository.save(product);
+        totalPrice += quantity*product.getPrice();
+        return totalPrice;
+
+    }
 }

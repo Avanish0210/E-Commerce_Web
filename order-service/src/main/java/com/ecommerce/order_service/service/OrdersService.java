@@ -2,6 +2,7 @@ package com.ecommerce.order_service.service;
 
 import com.ecommerce.order_service.clients.InventoryOpenFeignClient;
 import com.ecommerce.order_service.dto.OrderRequestDto;
+import com.ecommerce.order_service.dto.OrderRequestItemDto;
 import com.ecommerce.order_service.entity.OrderItem;
 import com.ecommerce.order_service.entity.OrderStatus;
 import com.ecommerce.order_service.entity.Orders;
@@ -58,7 +59,16 @@ public class OrdersService {
 
     public OrderRequestDto createOrderFallback(OrderRequestDto orderRequestDto , Throwable throwable) {
         log.error("Falling back occurred to : {}", throwable.getMessage());
-
         return new OrderRequestDto();
+    }
+
+    public void cancelOrder(Long id) {
+        Orders order = orderRepository.findById(id).orElseThrow(() -> new RuntimeException("Order not found"));
+
+        for(OrderItem orderItem: order.getItems()) {
+            OrderRequestItemDto orderRequestDto = modelMapper.map(orderItem, OrderRequestItemDto.class);
+            inventoryOpenFeignClient.addStocks(orderRequestDto);
+        }
+        orderRepository.delete(order);
     }
 }

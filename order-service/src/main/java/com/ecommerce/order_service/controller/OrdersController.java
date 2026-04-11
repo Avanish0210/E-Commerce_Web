@@ -42,4 +42,10 @@ public class OrdersController {
         OrderRequestDto order = orderService.getOrderById(id);
         return ResponseEntity.ok(order);  // Returns 200 OK with the order
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> cancelOrder(@PathVariable Long id) {
+        orderService.cancelOrder(id);
+        return ResponseEntity.ok().build();
+    }
 }
