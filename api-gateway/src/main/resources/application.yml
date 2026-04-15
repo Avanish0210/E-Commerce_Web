@@ -1,3 +1,6 @@
+jwt:
+  secretKey: ahjbfebfdjkaflkjeilreilflasmdjweijransfdalaskefhnil
+
 spring:
   application:
     name: api-gateway
@@ -13,6 +16,12 @@ spring:
             - StripPrefix=2
 #            - RedirectTo=302, http://codingshuttle.com
             - name: LoggingOrdersFilter
+            - name: Authentication
+              args:
+                Enabled: true
+            - name: Authorization
+              args:
+                allowedRoles: ADMIN, SUPER_ADMIN
         - id: inventory-service
           uri: lb://INVENTORY-SERVICE
           predicates:
@@ -20,6 +29,7 @@ spring:
           filters:
             - StripPrefix=2
             - AddRequestHeader=X-Custom-Header, Ava
+            - name: Authentication
 
 
 eureka:
