@@ -2,7 +2,6 @@ spring:
   application:
     name: api-gateway
 
-#api gateway config
   cloud:
     gateway:
       routes:
@@ -13,6 +12,7 @@ spring:
           filters:
             - StripPrefix=2
 #            - RedirectTo=302, http://codingshuttle.com
+            - name: LoggingOrdersFilter
         - id: inventory-service
           uri: lb://INVENTORY-SERVICE
           predicates:
