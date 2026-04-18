@@ -4,8 +4,8 @@ spring:
     config:
       server:
         git:
-          uri: https://github.com/username/ecommerce-config-server
-          username: Avanish0210
+          uri: https://github.com/${git_username}/ecommerce-config-server
+          username: ${git_username}
           password: ${password_config}
           default-label: main
 server:
