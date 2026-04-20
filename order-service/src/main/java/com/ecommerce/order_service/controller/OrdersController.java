@@ -1,11 +1,13 @@
 package com.ecommerce.order_service.controller;
 
+import com.ecommerce.order_service.config.FeatureEnableConfig;
 import com.ecommerce.order_service.dto.OrderRequestDto;
 import com.ecommerce.order_service.service.OrdersService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,14 +17,23 @@ import java.util.List;
 @RequestMapping("/core")
 @RequiredArgsConstructor
 @Slf4j
+@RefreshScope
 public class OrdersController {
 
     private final OrdersService orderService;
     @Value("${my.variable}")
     private String myVariable;
+
+    private final FeatureEnableConfig featureEnableConfig;
+
     @GetMapping("/helloOrders")
     public String helloOrders() {
-        return "Hello from order service , my variable is: " + myVariable;
+        if(featureEnableConfig.isUserTrackingEnabled()){
+            return "user tracking feature is enabled , my variable is: " + myVariable;
+        }else{
+            return "user tracking feature is disabled , my variable is: " + myVariable;
+        }
+
     }
 
     @GetMapping
