@@ -1,20 +1,20 @@
 package com.ecommerce.order_service.service;
 
-import com.ecommerce.order_service.clients.InventoryOpenFeignClient;
 import com.ecommerce.order_service.clients.ShippingOpenFeignClient;
 import com.ecommerce.order_service.dto.OrderRequestDto;
-import com.ecommerce.order_service.dto.OrderRequestItemDto;
 import com.ecommerce.order_service.dto.ShippingRequestDto;
 import com.ecommerce.order_service.entity.OrderItem;
 import com.ecommerce.order_service.entity.OrderStatus;
 import com.ecommerce.order_service.entity.Orders;
+import com.ecommerce.order_service.event.OrderCancelEvent;
+import com.ecommerce.order_service.event.OrderCreatedEvent;
+import com.ecommerce.order_service.event.OrderStatusUpdatedEvent;
 import com.ecommerce.order_service.repository.OrdersRepository;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
-import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,8 +26,16 @@ public class OrdersService {
 
     private final OrdersRepository orderRepository;
     private final ModelMapper modelMapper;
-    private final InventoryOpenFeignClient inventoryOpenFeignClient;
     private final ShippingOpenFeignClient shippingOpenFeignClient;
+
+    @Value("${kafka.topic.order-created-topic}")
+    private String KAFKA_ORDER_CREATED_TOPIC;
+
+    @Value("${kafka.topic.order-cancel-topic}")
+    private String KAFKA_ORDER_CANCEL_TOPIC;
+
+    private final KafkaTemplate<Long, OrderCreatedEvent> kafkaTemplate;
+    private final KafkaTemplate<Long , OrderCancelEvent> kafkaCancelTemplate;
 
     public List<OrderRequestDto> getAllOrders() {
         log.info("Fetching all orders");
@@ -41,42 +49,55 @@ public class OrdersService {
         return modelMapper.map(order, OrderRequestDto.class);
     }
 
-//    @Retry(name = "inventoryRetry" , fallbackMethod = "createOrderFallback")
-    @CircuitBreaker(name = "inventoryCircuitBreaker" , fallbackMethod = "createOrderFallback")
-//    @RateLimiter(name = "inventoryRateLimiter" , fallbackMethod = "createOrderFallback")
     public OrderRequestDto createOrder(OrderRequestDto orderRequestDto) {
         log.info("calling the createOrder method");
-        Double totalPrice = inventoryOpenFeignClient.reduceStocks(orderRequestDto);
+
+        Double totalPrice = orderRequestDto.getTotalPrice();
 
         Orders orders = modelMapper.map(orderRequestDto, Orders.class);
         for(OrderItem orderItem: orders.getItems()) {
             orderItem.setOrder(orders);
         }
         orders.setTotalPrice(totalPrice);
-        orders.setOrderStatus(OrderStatus.CONFIRMED);
+        orders.setOrderStatus(OrderStatus.PENDING);
 
         Orders savedOrder = orderRepository.save(orders);
         log.info("Order with ID: {}", savedOrder.getId());
 
-        ShippingRequestDto shippingRequestDto = new ShippingRequestDto();
-        shippingRequestDto.setOrderId(savedOrder.getId());
-        shippingOpenFeignClient.createShipping(shippingRequestDto);
+        OrderCreatedEvent orderCreatedEvent = modelMapper.map(savedOrder, OrderCreatedEvent.class);
+        orderCreatedEvent.setOrderId(savedOrder.getId());
+        kafkaTemplate.send(KAFKA_ORDER_CREATED_TOPIC , savedOrder.getId() , orderCreatedEvent);
 
         return modelMapper.map(savedOrder, OrderRequestDto.class);
     }
 
-    public OrderRequestDto createOrderFallback(OrderRequestDto orderRequestDto , Throwable throwable) {
-        log.error("Falling back occurred to : {}", throwable.getMessage());
-        return new OrderRequestDto();
+    public void updateOrderStatus(OrderStatusUpdatedEvent orderStatusUpdatedEvent) {
+        Orders order = orderRepository.findById(orderStatusUpdatedEvent.getOrderId())
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        OrderStatus orderStatus = OrderStatus.valueOf(orderStatusUpdatedEvent.getStatus());
+        order.setOrderStatus(orderStatus);
+        orderRepository.save(order);
+
+        if(orderStatus == OrderStatus.FULFILLED) {
+            ShippingRequestDto shippingRequestDto = new ShippingRequestDto();
+            shippingRequestDto.setOrderId(order.getId());
+            shippingOpenFeignClient.createShipping(shippingRequestDto);
+        }
     }
 
     public void cancelOrder(Long id) {
         Orders order = orderRepository.findById(id).orElseThrow(() -> new RuntimeException("Order not found"));
 
-        for(OrderItem orderItem: order.getItems()) {
-            OrderRequestItemDto orderRequestDto = modelMapper.map(orderItem, OrderRequestItemDto.class);
-            inventoryOpenFeignClient.addStocks(orderRequestDto);
+        if(order.getOrderStatus() == OrderStatus.FULFILLED || order.getOrderStatus() == OrderStatus.CONFIRMED) {
+            for(OrderItem orderItem: order.getItems()) {
+                OrderCancelEvent orderCancelEvent = modelMapper.map(orderItem, OrderCancelEvent.class);
+                orderCancelEvent.setOrderId(order.getId());
+                kafkaCancelTemplate.send(KAFKA_ORDER_CANCEL_TOPIC ,  order.getId() , orderCancelEvent);
+            }
         }
-        orderRepository.delete(order);
+
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
     }
 }

@@ -4,10 +4,15 @@ import com.ecommerce.inventory_service.dto.OrderRequestDto;
 import com.ecommerce.inventory_service.dto.OrderRequestItemDto;
 import com.ecommerce.inventory_service.dto.ProductDto;
 import com.ecommerce.inventory_service.entity.Product;
+import com.ecommerce.inventory_service.event.OrderCancelEvent;
+import com.ecommerce.inventory_service.event.OrderCreatedEvent;
+import com.ecommerce.inventory_service.event.OrderStatusUpdatedEvent;
 import com.ecommerce.inventory_service.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +26,10 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final ModelMapper modelMapper;
+    private final KafkaTemplate<Long, OrderStatusUpdatedEvent> kafkaTemplate;
+
+    @Value("${kafka.topic.order-status-updated-topic}")
+    private String KAFKA_ORDER_STATUS_UPDATED_TOPIC;
 
     public List<ProductDto> getAllInventory() {
         log.info("Fetching all inventory items");
@@ -38,29 +47,53 @@ public class ProductService {
     }
 
     @Transactional
-    public Double reduceStocks(OrderRequestDto orderRequestDto) {
+    public void reduceStocks(OrderCreatedEvent orderCreatedEvent) {
+
+        OrderRequestDto orderRequestDto = modelMapper.map(orderCreatedEvent, OrderRequestDto.class);
         log.info("Reducing the stocks");
-        Double totalPrice = 0.0;
-        for(OrderRequestItemDto orderRequestItemDto: orderRequestDto.getItems()) {
-            Long productId = orderRequestItemDto.getProductId();
-            Integer quantity = orderRequestItemDto.getQuantity();
 
-            Product product = productRepository.findById(productId).orElseThrow(() ->
-                    new RuntimeException("Product not found with id: "+productId));
+        try {
+            for(OrderRequestItemDto orderRequestItemDto: orderRequestDto.getItems()) {
+                Long productId = orderRequestItemDto.getProductId();
+                Integer quantity = orderRequestItemDto.getQuantity();
 
-            if(product.getStock() < quantity) {
-                throw new RuntimeException("Product cannot be fulfilled for given quantity");
+                Product product = productRepository.findById(productId).orElseThrow(() ->
+                        new RuntimeException("Product not found with id: "+productId));
+
+                if(product.getStock() < quantity) {
+                    publishOrderStatus(orderRequestDto.getOrderId(), "OUT_OF_STOCK",
+                            "Product cannot be fulfilled for given quantity");
+                    return;
+                }
             }
 
-            product.setStock(product.getStock()-quantity);
-            productRepository.save(product);
-            totalPrice += quantity*product.getPrice();
+            for(OrderRequestItemDto orderRequestItemDto: orderRequestDto.getItems()) {
+                Long productId = orderRequestItemDto.getProductId();
+                Integer quantity = orderRequestItemDto.getQuantity();
+
+                Product product = productRepository.findById(productId).orElseThrow(() ->
+                        new RuntimeException("Product not found with id: "+productId));
+
+                product.setStock(product.getStock()-quantity);
+                productRepository.save(product);
+            }
+
+            publishOrderStatus(orderRequestDto.getOrderId(), "FULFILLED", "Order fulfilled");
+        } catch (RuntimeException ex) {
+            publishOrderStatus(orderRequestDto.getOrderId(), "OUT_OF_STOCK", ex.getMessage());
         }
-        return totalPrice;
+
+    }
+
+    private void publishOrderStatus(Long orderId, String status, String message) {
+        OrderStatusUpdatedEvent orderStatusUpdatedEvent = new OrderStatusUpdatedEvent(orderId, status, message);
+        kafkaTemplate.send(KAFKA_ORDER_STATUS_UPDATED_TOPIC, orderId, orderStatusUpdatedEvent);
     }
 
     @Transactional
-    public Double addStocks(OrderRequestItemDto orderRequestItemDto) {
+    public Double addStocks(OrderCancelEvent orderCancelEvent) {
+
+        OrderRequestItemDto orderRequestItemDto = modelMapper.map(orderCancelEvent, OrderRequestItemDto.class);
         Double totalPrice = 0.0;
         Long productId = orderRequestItemDto.getProductId();
         Integer quantity = orderRequestItemDto.getQuantity();

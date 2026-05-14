@@ -6,6 +6,8 @@ import java.util.List;
 
 @Data
 public class OrderRequestDto {
+    private Long orderId;
+    private Double totalPrice;
     private List<OrderRequestItemDto> items;
 }
 

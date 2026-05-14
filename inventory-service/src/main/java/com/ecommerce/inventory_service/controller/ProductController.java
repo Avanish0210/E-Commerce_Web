@@ -1,19 +1,15 @@
 package com.ecommerce.inventory_service.controller;
 
 import com.ecommerce.inventory_service.clients.OrdersFeignClient;
-import com.ecommerce.inventory_service.dto.OrderRequestDto;
 import com.ecommerce.inventory_service.dto.OrderRequestItemDto;
 import com.ecommerce.inventory_service.dto.ProductDto;
 import com.ecommerce.inventory_service.service.ProductService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cloud.client.ServiceInstance;
-import org.springframework.cloud.client.discovery.DiscoveryClient;
+import org.modelmapper.ModelMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestClient;
-
 import java.util.List;
 
 @RestController
@@ -23,22 +19,13 @@ import java.util.List;
 public class ProductController {
 
     private final ProductService productService;
-    private final DiscoveryClient discoveryClient;
-    private final RestClient restClient;
+    private final ModelMapper modelMapper;
 
     private final OrdersFeignClient ordersFeignClient;
 
     @GetMapping("/fetchOrders")
     public String fetchFromOrderService(HttpServletRequest request) {
         log.info(request.getHeader("A-Custom_header"));
-//        ServiceInstance orderService = discoveryClient.getInstances("order-service").getFirst();
-
-
-//        return restClient.get()
-//                .uri(orderService.getUri()+"/orders/core/helloOrders")
-//                .retrieve()
-//                .body(String.class);
-
         return ordersFeignClient.helloOrders();
 
     }
@@ -55,17 +42,11 @@ public class ProductController {
         return ResponseEntity.ok(inventory);
     }
 
-    @PutMapping("reduce-stocks")
-    public ResponseEntity<Double> reduceStocks(@RequestBody OrderRequestDto orderRequestDto) {
-        Double totalPrice = productService.reduceStocks(orderRequestDto);
-        return ResponseEntity.ok(totalPrice);
-    }
 
-
-    @PutMapping("add-stocks")
-    public ResponseEntity<Double> addStocks(@RequestBody OrderRequestItemDto orderRequestItemDto) {
-        Double totalPrice = productService.addStocks(orderRequestItemDto);
-        return ResponseEntity.ok(totalPrice);
-    }
+//    @PutMapping("add-stocks")
+//    public ResponseEntity<Double> addStocks(@RequestBody OrderRequestItemDto orderRequestItemDto) {
+//        Double totalPrice = productService.addStocks(orderRequestItemDto);
+//        return ResponseEntity.ok(totalPrice);
+//    }
 
 }

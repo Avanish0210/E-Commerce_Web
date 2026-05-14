@@ -1,0 +1,27 @@
+
+kafka.topic:
+  order-created-topic: order-created-topic
+  order-status-updated-topic: order-status-updated-topic
+  order-cancel-topic: order-cancel-topic
+
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.LongSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: true
+        spring.json.type.mapping: orderCreated:com.ecommerce.order_service.event.OrderCreatedEvent,orderCancel:com.ecommerce.order_service.event.OrderCancelEvent,orderStatusUpdated:com.ecommerce.order_service.event.OrderStatusUpdatedEvent
+        schema:
+          registry:
+            url: "http://127.0.0.1:8081"
+    consumer:
+      group-id: ${spring.application.name}
+      key-deserializer: org.apache.kafka.common.serialization.LongDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json:
+          trusted.packages: com.ecommerce.*
+          use.type.headers: true
+          type.mapping: orderCreated:com.ecommerce.order_service.event.OrderCreatedEvent,orderCancel:com.ecommerce.order_service.event.OrderCancelEvent,orderStatusUpdated:com.ecommerce.order_service.event.OrderStatusUpdatedEvent

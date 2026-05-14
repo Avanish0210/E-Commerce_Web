@@ -33,7 +33,6 @@ public class OrdersController {
         }else{
             return "user tracking feature is disabled , my variable is: " + myVariable;
         }
-
     }
 
     @GetMapping
